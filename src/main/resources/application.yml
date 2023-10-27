@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: "jdbc:postgresql://localhost:5432/multitenant"
+    username: "user"
+    password: "pw"
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  jpa:
+    properties:
+      hibernate:
+        dialect: "org.hibernate.spatial.dialect.postgis.PostgisPG95Dialect"
+  security:
+    oauth2:
+      resourceserver:
+        multitenant:
+          enabled: true
+          jwt:
+            authorities-converter: "io.quantics.multitenant.oauth2.config.KeycloakRealmAuthoritiesConverter"
+          resolve-mode: "jwt"
