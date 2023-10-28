@@ -22,4 +22,4 @@ CREATE TABLE balam.asset
 );
 
 INSERT INTO balam.asset (id, name, created_timestamp, server_url)
-VALUES ('b74df32a-99c9-482c-87ca-eccc7013197f', 'G5 Iguazu', '1970-01-01T00:00:00.000Z', 'https://balam.space/mind-gamma');
+VALUES ('b74df32a-99c9-482c-87ca-eccc7013197f', 'G5 Iguazu', '1970-01-01T00:00:00.000Z', 'https://balam.space/head-bringer');

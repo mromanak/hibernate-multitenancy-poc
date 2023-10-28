@@ -53,22 +53,60 @@ public class AssetControllerIT extends AbstractControllerIT {
     }
 
     @Nested
-    @DisplayName("POST operation")
-    public class PostOperationTests {
+    @DisplayName("POST /asset")
+    public class PostAssetTests {
+
+        private static final String PATH = "/asset";
 
         @Test
-        @DisplayName("should validate request body")
-        public void postShouldValidateRequestBody() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
+        @DisplayName("Should return status 200 for a valid request")
+        public void shouldReturn200ForValidRequest() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            var path = "/asset";
+            var arquebusRequestBody = new AssetDto();
+            arquebusRequestBody.setName("V.I Freud");
+            arquebusRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            arquebusRequestBody.setServerUrl("https://arquebus.space/locksmith");
+
+            var balamRequestBody = new AssetDto();
+            balamRequestBody.setName("G1 Michigan");
+            balamRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            balamRequestBody.setServerUrl("https://arquebus.space/liger-tail");
+
+            var arquebusMvcResult = sendPostRequestWithToken(PATH, arquebusRequestBody, ARQUEBUS_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn();
+            var arquebusResponseBody = getContentAs(arquebusMvcResult, Asset.class);
+
+            assertThat(arquebusResponseBody.getId(), is(not(nullValue())));
+            assertThat(arquebusResponseBody.getName(), is(equalTo(arquebusRequestBody.getName())));
+            assertThat(arquebusResponseBody.getCreatedTimestamp(),
+                    is(equalTo(parseDateFromString(arquebusRequestBody.getCreatedTimestamp()))));
+            assertThat(arquebusResponseBody.getServerUrl().toString(), is(equalTo(arquebusRequestBody.getServerUrl())));
+
+            var balamMvcResult = sendPostRequestWithToken(PATH, balamRequestBody, BALAM_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andReturn();
+            var balamResponseBody = getContentAs(balamMvcResult, Asset.class);
+
+            assertThat(balamResponseBody.getId(), is(not(nullValue())));
+            assertThat(balamResponseBody.getName(), is(equalTo(balamRequestBody.getName())));
+            assertThat(balamResponseBody.getCreatedTimestamp(),
+                    is(equalTo(parseDateFromString(balamRequestBody.getCreatedTimestamp()))));
+            assertThat(balamResponseBody.getServerUrl().toString(), is(equalTo(balamRequestBody.getServerUrl())));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for an invalid request body")
+        public void shouldReturn400ForInvalidRequestBody() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
 
             var requestBody = new AssetDto();
             requestBody.setName("");
             requestBody.setCreatedTimestamp("not-a-timestamp");
             requestBody.setServerUrl("not-a-url");
 
-            sendPostRequest(path, requestBody, ARQUEBUS_JWT)
+            sendPostRequestWithToken(PATH, requestBody, ARQUEBUS_JWT)
                     .andExpect(status().isBadRequest())
                     .andExpect(content().json("""
                             {
@@ -99,98 +137,258 @@ public class AssetControllerIT extends AbstractControllerIT {
         }
 
         @Test
-        @DisplayName("should reject a request from an unknown tenant")
-        public void postShouldUpdateRejectUpdateForUnknownTenant() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
+        @DisplayName("Should return status 401 for invalid authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForInvalidAuthentication() throws Exception {
             var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
+            requestBody.setName("V.I Freud");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
+            requestBody.setServerUrl("https://arquebus.space/locksmith");
 
-            sendPostRequest(path, requestBody, UNKNOWN_TENANT_JWT)
+            sendPostRequestWithToken(PATH, requestBody, UNKNOWN_TENANT_JWT)
                     .andExpect(status().isUnauthorized())
-                    .andExpect(header().string("WWW-Authenticate", containsString("Bearer error=\"invalid_token\"")))
-                    .andExpect(header().string("WWW-Authenticate", containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Bearer error=\"invalid_token\"")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject an update with no authorization")
-        public void postShouldUpdateRejectUpdateWithNoAuthorization() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset";
+        @DisplayName("Should return status 403 for missing authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForMissingAuthentication() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
             var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
+            requestBody.setName("V.I Freud");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
+            requestBody.setServerUrl("https://arquebus.space/locksmith");
 
-            mockMvc.perform(post(path)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestBody)))
+            mockMvc.perform(
+                            post(PATH)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(objectMapper.writeValueAsString(requestBody))
+                    )
                     .andExpect(status().isForbidden())
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject a request from a user without the write:asset role")
-        public void postShouldUpdateRejectRequestFromUserWithoutWriteAccess() throws Exception {
-            registerTestTenantJwts(Collections.emptyList());
-
-            var path = "/asset";
+        @DisplayName("Should return status 403 for inadequate permissions")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForInadequatePermissions() throws Exception {
+            registerArquebusJwtWithRoles(List.of());
 
             var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
+            requestBody.setName("V.I Freud");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
+            requestBody.setServerUrl("https://arquebus.space/locksmith");
 
-            mockMvc.perform(post(path)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(objectMapper.writeValueAsString(requestBody)))
+            sendPostRequestWithToken(PATH, requestBody, ARQUEBUS_JWT)
                     .andExpect(status().isForbidden())
                     .andExpect(content().string(""));
-        }
-
-        @Test
-        @DisplayName("should create new Asset for a properly authorized request")
-        public void postShouldUpdateAnExistingAsset() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset";
-
-            var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
-            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
-
-            var mvcResult = sendPostRequest(path, requestBody, ARQUEBUS_JWT)
-                    .andExpect(status().is2xxSuccessful())
-                    .andReturn();
-            var responseBody = getContentAs(mvcResult, Asset.class);
-
-            assertThat(responseBody.getId(), is(not(nullValue())));
-            assertThat(responseBody.getName(), is(equalTo(requestBody.getName())));
-            assertThat(responseBody.getCreatedTimestamp(), is(equalTo(parseDateFromString(requestBody.getCreatedTimestamp()))));
-            assertThat(responseBody.getServerUrl().toString(), is(equalTo(requestBody.getServerUrl())));
         }
     }
 
     @Nested
-    @DisplayName("GET operation")
-    public class GetOperationTests {
+    @DisplayName("GET /asset")
+    public class GetAssetTests {
+
+        private static final String PATH = "/asset";
 
         @Test
-        @DisplayName("should validate request parameters")
-        public void getShouldValidateRequestBody() throws Exception {
-             registerTestTenantJwts(List.of("read:asset"));
+        @DisplayName("Should return status 200 for a valid request")
+        public void shouldReturn200ForValidRequest() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("read:asset"));
 
-            var path = "/asset/not-a-uuid";
+            sendGetRequestWithToken(PATH, ARQUEBUS_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "content": [
+                                    {
+                                        "id": "7471da05-d4ba-4531-ab64-755b94c88635",
+                                        "name": "V.IV Rusty",
+                                        "createdTimestamp": "1970-01-01T00:00:00.000Z",
+                                        "serverUrl": "https://arquebus.space/steel-haze"
+                                    }
+                                ],
+                                "pageable": {
+                                    "sort": {
+                                        "empty": true,
+                                        "sorted": false,
+                                        "unsorted": true
+                                    },
+                                    "offset": 0,
+                                    "pageNumber": 0,
+                                    "pageSize": 25,
+                                    "paged": true,
+                                    "unpaged": false
+                                },
+                                "last": true,
+                                "totalPages": 1,
+                                "totalElements": 1,
+                                "size": 25,
+                                "numberOfElements": 1,
+                                "first": true,
+                                "number": 0,
+                                "sort": {
+                                    "empty": true,
+                                    "sorted": false,
+                                    "unsorted": true
+                                },
+                                "empty": false
+                            }"""));
 
-            sendGetRequest(path, ARQUEBUS_JWT)
+            sendGetRequestWithToken(PATH, BALAM_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "content": [
+                                    {
+                                        "id": "b74df32a-99c9-482c-87ca-eccc7013197f",
+                                        "name": "G5 Iguazu",
+                                        "createdTimestamp": "1970-01-01T00:00:00.000Z",
+                                        "serverUrl": "https://balam.space/head-bringer"
+                                    }
+                                ],
+                                "pageable": {
+                                    "sort": {
+                                        "empty": true,
+                                        "sorted": false,
+                                        "unsorted": true
+                                    },
+                                    "offset": 0,
+                                    "pageNumber": 0,
+                                    "pageSize": 25,
+                                    "paged": true,
+                                    "unpaged": false
+                                },
+                                "last": true,
+                                "totalPages": 1,
+                                "totalElements": 1,
+                                "size": 25,
+                                "numberOfElements": 1,
+                                "first": true,
+                                "number": 0,
+                                "sort": {
+                                    "empty": true,
+                                    "sorted": false,
+                                    "unsorted": true
+                                },
+                                "empty": false
+                            }"""));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for invalid URL parameters")
+        public void shouldReturn400ForInvalidUrlParameters() throws Exception {
+            registerArquebusJwtWithRoles(List.of("read:asset"));
+
+            mockMvc.perform(
+                            get(PATH).queryParam("pageNumber", "-1")
+                                    .queryParam("pageSize", "1000000")
+                                    .queryParam("sortField", "serverUrl")
+                                    .queryParam("sortDirection", "sideways")
+                                    .with(bearerToken(ARQUEBUS_JWT))
+                    )
+                    .andExpect(status().is(400))
+                    .andExpect(content().json("""
+                            {
+                                "errorMessage": "The provided request parameters were invalid",
+                                "validationErrors": [
+                                    {
+                                        "field": "getAssetPage.sortField",
+                                        "message": "must be one of the enumerated sort fields for an Asset"
+                                    },
+                                    {
+                                        "field": "getAssetPage.pageNumber",
+                                        "message": "must be greater than or equal to 0"
+                                    },
+                                    {
+                                        "field": "getAssetPage.sortDirection",
+                                        "message": "must be one of the enumerated sort directions"
+                                    },
+                                    {
+                                        "field": "getAssetPage.pageSize",
+                                        "message": "must be less than or equal to 100"
+                                    }
+                                ]
+                            }"""));
+
+        }
+
+        @Test
+        @DisplayName("Should return status 401 for invalid authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForInvalidAuthentication() throws Exception {
+            sendGetRequestWithToken(PATH, UNKNOWN_TENANT_JWT)
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(content().string(""));
+        }
+
+        @Test
+        @DisplayName("Should return status 403 for missing authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForMissingAuthentication() throws Exception {
+            mockMvc.perform(get(PATH))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(content().string(""));
+        }
+
+        @Test
+        @DisplayName("Should return status 403 for inadequate permissions")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForInadequatePermissions() throws Exception {
+            registerArquebusJwtWithRoles(Collections.emptyList());
+
+            sendGetRequestWithToken(PATH, ARQUEBUS_JWT)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(""));
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /asset/{id}")
+    public class GetAssetByIdTests {
+
+        private static final String PATH_TEMPLATE = "/asset/%s";
+
+        @Test
+        @DisplayName("Should return status 200 for a valid request")
+        public void shouldReturn200ForValidRequest() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("read:asset"));
+
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "id": "%s",
+                                "name": "V.IV Rusty",
+                                "createdTimestamp": "1970-01-01T00:00:00.000Z",
+                                "serverUrl": "https://arquebus.space/steel-haze"
+                            }""".formatted(ARQUEBUS_TEST_ASSET_ID)
+                    ));
+
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), BALAM_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "id": "%s",
+                                "name": "G5 Iguazu",
+                                "createdTimestamp": "1970-01-01T00:00:00.000Z",
+                                "serverUrl": "https://balam.space/head-bringer"
+                            }""".formatted(BALAM_TEST_ASSET_ID)
+                    ));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for invalid URL parameters")
+        public void shouldReturn400ForInvalidUrlParameters() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("read:asset"));
+
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted("notAUuid"), ARQUEBUS_JWT)
                     .andExpect(status().isBadRequest())
                     .andExpect(content().json("""
                             {
@@ -206,52 +404,63 @@ public class AssetControllerIT extends AbstractControllerIT {
         }
 
         @Test
-        @DisplayName("should reject a request from an unknown tenant")
-        public void getShouldUpdateRejectUpdateForUnknownTenant() throws Exception {
-             registerTestTenantJwts(List.of("read:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            sendGetRequest(path, UNKNOWN_TENANT_JWT)
+        @DisplayName("Should return status 401 for invalid authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForInvalidAuthentication() throws Exception {
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), UNKNOWN_TENANT_JWT)
                     .andExpect(status().isUnauthorized())
-                    .andExpect(header().string("WWW-Authenticate", containsString("Bearer error=\"invalid_token\"")))
-                    .andExpect(header().string("WWW-Authenticate", containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Bearer error=\"invalid_token\"")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject a request with no authorization")
-        public void getShouldUpdateRejectUpdateWithNoAuthorization() throws Exception {
-             registerTestTenantJwts(List.of("read:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            mockMvc.perform(get(path))
+        @DisplayName("Should return status 401 for missing authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForMissingAuthentication() throws Exception {
+            mockMvc.perform(get(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID)))
                     .andExpect(status().isUnauthorized())
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject an request from a user without the read:asset role")
-        public void getShouldUpdateRejectRequestFromUserWithoutReadAccess() throws Exception {
-             registerTestTenantJwts(Collections.emptyList());
+        @DisplayName("Should return status 403 for inadequate permissions")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForInadequatePermissions() throws Exception {
+            registerArquebusJwtWithRoles(Collections.emptyList());
 
             var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
 
-            sendGetRequest(path, ARQUEBUS_JWT)
+            sendGetRequestWithToken(path, ARQUEBUS_JWT)
                     .andExpect(status().isForbidden())
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should not return Assets from other tenants")
-        public void getShouldNotReturnAssetsFromOtherTenants() throws Exception {
-             registerTestTenantJwts(List.of("read:asset"));
+        @DisplayName("Should return status 404 if entity with ID does not exist")
+        // TODO: Implement documented error response body
+        public void shouldReturn404ForNonexistentId() throws Exception {
+            registerArquebusJwtWithRoles(List.of("read:asset"));
 
-            var arquebusPath = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-            var balamPath = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
+            var nonexistentId = "4776b07b-3018-41b7-898b-3a97c07db8d8";
 
-            sendGetRequest(arquebusPath, BALAM_JWT)
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(nonexistentId), ARQUEBUS_JWT)
+                    .andExpect(status().isNotFound())
+                    .andExpect(content().json("""
+                            {
+                                "errorMessage": "No Asset entity found with ID %s"
+                            }""".formatted(nonexistentId)
+                    ));
+        }
+
+        @Test
+        @DisplayName("Should return status 404 if entity with ID exists in different tenant")
+        public void shouldReturn404ForCrossTenantId() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("read:asset"));
+
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), BALAM_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
@@ -259,7 +468,7 @@ public class AssetControllerIT extends AbstractControllerIT {
                             }""".formatted(ARQUEBUS_TEST_ASSET_ID)
                     ));
 
-            sendGetRequest(balamPath, ARQUEBUS_JWT)
+            sendGetRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
@@ -267,57 +476,97 @@ public class AssetControllerIT extends AbstractControllerIT {
                             }""".formatted(BALAM_TEST_ASSET_ID)
                     ));
         }
-
-        @Test
-        @DisplayName("should return the requested Asset for a properly authorized request")
-        public void getShouldReturnAssetsFromAuthorizedTenant() throws Exception {
-             registerTestTenantJwts(List.of("read:asset"));
-
-            var arquebusPath = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-            var balamPath = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
-
-            sendGetRequest(arquebusPath, ARQUEBUS_JWT)
-                    .andExpect(status().is2xxSuccessful())
-                    .andExpect(content().json("""
-                            {
-                                "id": "%s",
-                                "name": "V.IV Rusty",
-                                "createdTimestamp": "1970-01-01T00:00:00.000Z",
-                                "serverUrl": "https://arquebus.space/steel-haze"
-                            }""".formatted(ARQUEBUS_TEST_ASSET_ID)
-                    ));
-
-            sendGetRequest(balamPath, BALAM_JWT)
-                    .andExpect(status().is2xxSuccessful())
-                    .andExpect(content().json("""
-                            {
-                                "id": "%s",
-                                "name": "G5 Iguazu",
-                                "createdTimestamp": "1970-01-01T00:00:00.000Z",
-                                "serverUrl": "https://balam.space/mind-gamma"
-                            }
-                            """.formatted(BALAM_TEST_ASSET_ID)
-                    ));
-        }
     }
 
     @Nested
-    @DisplayName("PUT operation")
-    public class PutOperationTests {
+    @DisplayName("PUT /asset/{id}")
+    public class PutAssetTests {
+
+        private static final String PATH_TEMPLATE = "/asset/%s";
 
         @Test
-        @DisplayName("should validate request body")
-        public void putShouldValidateRequestBody() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
+        @DisplayName("Should return status 200 for a valid request")
+        public void shouldReturn200ForValidRequest() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
+            var arquebusRequestBody = new AssetDto();
+            arquebusRequestBody.setName("V.IV Rusty");
+            arquebusRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            arquebusRequestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
+
+            var balamRequestBody = new AssetDto();
+            balamRequestBody.setName("G5 Iguazu");
+            balamRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            balamRequestBody.setServerUrl("https://balam.space/mind-gamma");
+
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), arquebusRequestBody, ARQUEBUS_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "id": "%s",
+                                "name": "%s",
+                                "createdTimestamp": "%s",
+                                "serverUrl": "%s"
+                            }"""
+                            .formatted(
+                                    ARQUEBUS_TEST_ASSET_ID,
+                                    arquebusRequestBody.getName(),
+                                    arquebusRequestBody.getCreatedTimestamp(),
+                                    arquebusRequestBody.getServerUrl()
+                            )));
+
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), balamRequestBody, BALAM_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().json("""
+                            {
+                                "id": "%s",
+                                "name": "%s",
+                                "createdTimestamp": "%s",
+                                "serverUrl": "%s"
+                            }"""
+                            .formatted(
+                                    BALAM_TEST_ASSET_ID,
+                                    balamRequestBody.getName(),
+                                    balamRequestBody.getCreatedTimestamp(),
+                                    balamRequestBody.getServerUrl()
+                            )));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for invalid URL parameters")
+        public void shouldReturn400ForInvalidUrlParameters() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
+
+            var requestBody = new AssetDto();
+            requestBody.setName("V.IV Rusty");
+            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
+
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted("notAUuid"), requestBody, ARQUEBUS_JWT)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(content().json("""
+                            {
+                                "errorMessage": "The provided request parameters were invalid",
+                                "validationErrors": [
+                                    {
+                                        "field": "updateAsset.id",
+                                        "message": "must be a valid UUID"
+                                    }
+                                ]
+                            }"""));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for an invalid request body")
+        public void shouldReturn400ForInvalidRequestBody() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
 
             var requestBody = new AssetDto();
             requestBody.setName("");
-            requestBody.setCreatedTimestamp("not-a-timestamp");
-            requestBody.setServerUrl("not-a-url");
+            requestBody.setCreatedTimestamp("notATimestamp");
+            requestBody.setServerUrl("notAUrl");
 
-            sendPutRequest(path, requestBody, ARQUEBUS_JWT)
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), requestBody, ARQUEBUS_JWT)
                     .andExpect(status().isBadRequest())
                     .andExpect(content().json("""
                             {
@@ -348,60 +597,33 @@ public class AssetControllerIT extends AbstractControllerIT {
         }
 
         @Test
-        @DisplayName("should reject a request to a non-existent Asset")
-        public void putShouldUpdateRejectUpdateForNonExistentAsset() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
-
-            var id = "bc6a0ff7-793b-4d4d-986a-9dcc895bbe12";
-            var path = "/asset/%s".formatted(id);
-
+        @DisplayName("Should return status 401 for invalid authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForInvalidAuthentication() throws Exception {
             var requestBody = new AssetDto();
-            requestBody.setName("V.I Freud");
-            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/locksmit");
-
-            sendPutRequest(path, requestBody, ARQUEBUS_JWT)
-                    .andExpect(status().isNotFound())
-                    .andExpect(content().json("""
-                            {
-                                "errorMessage": "No Asset entity found with ID %s"
-                            }
-                            """.formatted(id)
-                    ));
-        }
-
-        @Test
-        @DisplayName("should reject a request from an unknown tenant")
-        public void putShouldUpdateRejectUpdateForUnknownTenant() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            AssetDto requestBody = new AssetDto();
             requestBody.setName("V.IV Rusty");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
             requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
 
-            sendPutRequest(path, requestBody, UNKNOWN_TENANT_JWT)
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), requestBody, UNKNOWN_TENANT_JWT)
                     .andExpect(status().isUnauthorized())
-                    .andExpect(header().string("WWW-Authenticate", containsString("Bearer error=\"invalid_token\"")))
-                    .andExpect(header().string("WWW-Authenticate", containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Bearer error=\"invalid_token\"")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject a request with no authorization")
-        public void putShouldUpdateRejectUpdateWithNoAuthorization() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
+        @DisplayName("Should return status 403 for missing authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForMissingAuthentication() throws Exception {
             var requestBody = new AssetDto();
             requestBody.setName("V.IV Rusty");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
             requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
 
-            mockMvc.perform(put(path)
+            mockMvc.perform(put(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(requestBody)))
                     .andExpect(status().isForbidden())
@@ -409,85 +631,101 @@ public class AssetControllerIT extends AbstractControllerIT {
         }
 
         @Test
-        @DisplayName("should reject cross-tenant requests")
-        public void putShouldUpdateRejectCrossTenantUpdates() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
+        @DisplayName("Should return status 403 for inadequate permissions")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForInadequatePermissions() throws Exception {
+            registerArquebusJwtWithRoles(Collections.emptyList());
 
             var requestBody = new AssetDto();
-            requestBody.setName("ARQUEBUS RULES");
+            requestBody.setName("V.IV Rusty");
             requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/balam-drools");
+            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
 
-            sendPutRequest(path, requestBody, ARQUEBUS_JWT)
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), requestBody, ARQUEBUS_JWT)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(""));
+        }
+
+        @Test
+        @DisplayName("Should return status 404 if entity with ID does not exist")
+        public void shouldReturn404ForNonexistentId() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
+
+            var nonexistentId = "bc6a0ff7-793b-4d4d-986a-9dcc895bbe12";
+
+            var requestBody = new AssetDto();
+            requestBody.setName("V.I Freud");
+            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            requestBody.setServerUrl("https://arquebus.space/locksmit");
+
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(nonexistentId), requestBody, ARQUEBUS_JWT)
+                    .andExpect(status().isNotFound())
+                    .andExpect(content().json("""
+                            {
+                                "errorMessage": "No Asset entity found with ID %s"
+                            }""".formatted(nonexistentId)
+                    ));
+        }
+
+        @Test
+        @DisplayName("Should return status 404 if entity with ID exists in different tenant")
+        public void shouldReturn404ForCrossTenantId() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
+
+            var arquebusRequestBody = new AssetDto();
+            arquebusRequestBody.setName("ARQUEBUS RULES");
+            arquebusRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            arquebusRequestBody.setServerUrl("https://arquebus.space/balam-drools");
+
+            var balamRequestBody = new AssetDto();
+            balamRequestBody.setName("NO U");
+            balamRequestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
+            balamRequestBody.setServerUrl("https://balam.space/you-are-the-silly-man");
+
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), arquebusRequestBody, ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
                                 "errorMessage": "No Asset entity found with ID %s"
                             }""".formatted(BALAM_TEST_ASSET_ID)
                     ));
-        }
 
-        @Test
-        @DisplayName("should reject an request from a user without the write:asset role")
-        public void putShouldUpdateRejectRequestFromUserWithoutWriteAccess() throws Exception {
-             registerTestTenantJwts(Collections.emptyList());
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
-            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
-
-            sendPutRequest(path, requestBody, ARQUEBUS_JWT)
-                    .andExpect(status().isForbidden())
-                    .andExpect(content().string(""));
-        }
-
-        @Test
-        @DisplayName("should update an existing Asset for a properly authorized request")
-        public void putShouldUpdateAnExistingAsset() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var id = ARQUEBUS_TEST_ASSET_ID;
-            var path = "/asset/%s".formatted(id);
-
-            var requestBody = new AssetDto();
-            requestBody.setName("V.IV Rusty");
-            requestBody.setCreatedTimestamp("1970-01-01T00:00:00.000Z");
-            requestBody.setServerUrl("https://arquebus.space/steel-haze-ortus");
-
-            sendPutRequest(path, requestBody, ARQUEBUS_JWT)
-                    .andExpect(status().is2xxSuccessful())
+            sendPutRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), balamRequestBody, BALAM_JWT)
+                    .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
-                                "id": "%s",
-                                "name": "%s",
-                                "createdTimestamp": "%s",
-                                "serverUrl": "%s"
-                            }""".formatted(
-                            id,
-                            requestBody.getName(),
-                            requestBody.getCreatedTimestamp(),
-                            requestBody.getServerUrl()
-                    )));
+                                "errorMessage": "No Asset entity found with ID %s"
+                            }""".formatted(ARQUEBUS_TEST_ASSET_ID)
+                    ));
         }
     }
 
     @Nested
-    @DisplayName("DELETE operation")
-    public class DeleteOperationTests {
+    @DisplayName("DELETE /asset/{id}")
+    public class DeleteAssetTests {
+
+        private static final String PATH_TEMPLATE = "/asset/%s";
 
         @Test
-        @DisplayName("should validate request parameters")
-        public void putShouldValidateRequestBody() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
+        @DisplayName("Should return status 204 for a valid request")
+        public void shouldReturn204ForValidRequest() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            var path = "/asset/not-a-uuid";
+            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().string(""));
 
-            sendDeleteRequest(path, ARQUEBUS_JWT)
+            sendDeleteRequest(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), BALAM_JWT)
+                    .andExpect(status().is2xxSuccessful())
+                    .andExpect(content().string(""));
+        }
+
+        @Test
+        @DisplayName("Should return status 400 for invalid URL parameters")
+        public void shouldReturn400ForInvalidUrlParameters() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
+
+            sendDeleteRequest(PATH_TEMPLATE.formatted("notAUuid"), ARQUEBUS_JWT)
                     .andExpect(status().isBadRequest())
                     .andExpect(content().json("""
                             {
@@ -503,58 +741,60 @@ public class AssetControllerIT extends AbstractControllerIT {
         }
 
         @Test
-        @DisplayName("should reject a request from an unknown tenant")
-        public void putShouldUpdateRejectUpdateForUnknownTenant() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            sendDeleteRequest(path, UNKNOWN_TENANT_JWT)
+        @DisplayName("Should return status 401 for invalid authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn401ForInvalidAuthentication() throws Exception {
+            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), UNKNOWN_TENANT_JWT)
                     .andExpect(status().isUnauthorized())
-                    .andExpect(header().string("WWW-Authenticate", containsString("Bearer error=\"invalid_token\"")))
-                    .andExpect(header().string("WWW-Authenticate", containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Bearer error=\"invalid_token\"")))
+                    .andExpect(header().string("WWW-Authenticate",
+                            containsString("Unknown tenant: https://idp.example.org/unknown-tenant")))
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject a request with no authorization")
-        public void putShouldUpdateRejectUpdateWithNoAuthorization() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var path = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-
-            mockMvc.perform(delete(path))
+        @DisplayName("Should return status 403 for missing authentication")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForMissingAuthentication() throws Exception {
+            mockMvc.perform(delete(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID)))
                     .andExpect(status().isForbidden())
                     .andExpect(content().string(""));
         }
 
         @Test
-        @DisplayName("should reject a request for a non-existent Asset")
-        public void deleteShouldUpdateRejectUpdateForNonExistentAsset() throws Exception {
-            registerTestTenantJwts(List.of("write:asset"));
+        @DisplayName("Should return status 403 for inadequate permissions")
+        // TODO: Implement documented error response body
+        public void shouldReturn403ForInadequatePermissions() throws Exception {
+            registerArquebusJwtWithRoles(Collections.emptyList());
 
-            var id = "bc6a0ff7-793b-4d4d-986a-9dcc895bbe12";
-            var path = "/asset/%s".formatted(id);
+            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().string(""));
+        }
 
-            sendDeleteRequest(path, ARQUEBUS_JWT)
+        @Test
+        @DisplayName("Should return status 404 if entity with ID does not exist")
+        public void shouldReturn404ForNonexistentId() throws Exception {
+            registerArquebusJwtWithRoles(List.of("write:asset"));
+
+            var nonexistentId = "bb4a7634-3563-42d6-b946-c16808d1ec4c";
+
+            sendDeleteRequest(PATH_TEMPLATE.formatted(nonexistentId), ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
                                 "errorMessage": "No Asset entity found with ID %s"
-                            }
-                            """.formatted(id)
+                            }""".formatted(nonexistentId)
                     ));
         }
 
         @Test
-        @DisplayName("should not delete Assets from other tenants")
-        public void putShouldNotReturnAssetsFromOtherTenants() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
+        @DisplayName("Should return status 404 if entity with ID exists in different tenant")
+        public void shouldReturn404ForCrossTenantId() throws Exception {
+            registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            var arquebusPath = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-            var balamPath = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
-
-            sendDeleteRequest(arquebusPath, BALAM_JWT)
+            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), BALAM_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
@@ -562,47 +802,13 @@ public class AssetControllerIT extends AbstractControllerIT {
                             }""".formatted(ARQUEBUS_TEST_ASSET_ID)
                     ));
 
-            sendDeleteRequest(balamPath, ARQUEBUS_JWT)
+            sendDeleteRequest(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
                                 "errorMessage": "No Asset entity found with ID %s"
                             }""".formatted(BALAM_TEST_ASSET_ID)
                     ));
-        }
-
-        @Test
-        @DisplayName("should reject a request from a user without the write:asset role")
-        public void deleteShouldUpdateRejectRequestFromUserWithoutWriteAccess() throws Exception {
-            registerTestTenantJwts(Collections.emptyList());
-
-            var arquebusPath = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-            var balamPath = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
-
-            sendDeleteRequest(arquebusPath, ARQUEBUS_JWT)
-                    .andExpect(status().isForbidden())
-                    .andExpect(content().string(""));
-
-            sendDeleteRequest(balamPath, BALAM_JWT)
-                    .andExpect(status().isForbidden())
-                    .andExpect(content().string(""));
-        }
-
-        @Test
-        @DisplayName("should delete requested Asset for a properly authorized request")
-        public void putShouldReturnAssetsFromAuthorizedTenant() throws Exception {
-             registerTestTenantJwts(List.of("write:asset"));
-
-            var arquebusPath = "/asset/%s".formatted(ARQUEBUS_TEST_ASSET_ID);
-            var balamPath = "/asset/%s".formatted(BALAM_TEST_ASSET_ID);
-
-            sendDeleteRequest(arquebusPath, ARQUEBUS_JWT)
-                    .andExpect(status().is2xxSuccessful())
-                    .andExpect(content().string(""));
-
-            sendDeleteRequest(balamPath, BALAM_JWT)
-                    .andExpect(status().is2xxSuccessful())
-                    .andExpect(content().string(""));
         }
     }
 }

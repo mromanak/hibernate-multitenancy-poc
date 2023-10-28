@@ -47,11 +47,11 @@ public abstract class AbstractControllerIT {
     // Can't apply @MockBean to constructor parameters
     protected abstract JwtDecoder getMockJwtDecoder();
 
-    protected ResultActions sendGetRequest(String path, String token) throws Exception {
+    protected ResultActions sendGetRequestWithToken(String path, String token) throws Exception {
         return mockMvc.perform(get(path).with(bearerToken(token)));
     }
 
-    protected ResultActions sendPostRequest(String path, Object requestBody, String token) throws Exception {
+    protected ResultActions sendPostRequestWithToken(String path, Object requestBody, String token) throws Exception {
         return mockMvc.perform(post(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(requestBody))
@@ -81,20 +81,20 @@ public abstract class AbstractControllerIT {
                                 "sub", "e489ffe7-22d2-40ef-bde1-fd069ac8af0b")));
     }
 
-    protected void registerArquebusJwt(List<String> roles) {
+    protected void registerArquebusJwtWithRoles(List<String> roles) {
         registerJwtWithRoles(ARQUEBUS_JWT, ARQUEBUS_ISSUER, roles);
     }
 
-    protected void registerBalamJwt(List<String> roles) {
+    protected void registerBalamJwtWithRoles(List<String> roles) {
         registerJwtWithRoles(BALAM_JWT, BALAM_ISSUER, roles);
     }
 
-    protected void registerTestTenantJwts(List<String> roles) {
-        registerArquebusJwt(roles);
-        registerBalamJwt(roles);
+    protected void registerAllTenantJwtsWithRoles(List<String> roles) {
+        registerArquebusJwtWithRoles(roles);
+        registerBalamJwtWithRoles(roles);
     }
 
-    protected ResultActions sendPutRequest(String path, Object requestBody, String token) throws Exception {
+    protected ResultActions sendPutRequestWithToken(String path, Object requestBody, String token) throws Exception {
         return mockMvc.perform(put(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(requestBody))
