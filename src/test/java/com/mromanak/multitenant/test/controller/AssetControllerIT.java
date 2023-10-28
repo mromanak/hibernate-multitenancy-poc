@@ -178,7 +178,7 @@ public class AssetControllerIT extends AbstractControllerIT {
         @DisplayName("Should return status 403 for inadequate permissions")
         // TODO: Implement documented error response body
         public void shouldReturn403ForInadequatePermissions() throws Exception {
-            registerArquebusJwtWithRoles(List.of());
+            registerArquebusJwtWithRoles(Collections.emptyList());
 
             var requestBody = new AssetDto();
             requestBody.setName("V.I Freud");
@@ -711,11 +711,11 @@ public class AssetControllerIT extends AbstractControllerIT {
         public void shouldReturn204ForValidRequest() throws Exception {
             registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
                     .andExpect(status().is2xxSuccessful())
                     .andExpect(content().string(""));
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), BALAM_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), BALAM_JWT)
                     .andExpect(status().is2xxSuccessful())
                     .andExpect(content().string(""));
         }
@@ -725,7 +725,7 @@ public class AssetControllerIT extends AbstractControllerIT {
         public void shouldReturn400ForInvalidUrlParameters() throws Exception {
             registerArquebusJwtWithRoles(List.of("write:asset"));
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted("notAUuid"), ARQUEBUS_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted("notAUuid"), ARQUEBUS_JWT)
                     .andExpect(status().isBadRequest())
                     .andExpect(content().json("""
                             {
@@ -744,7 +744,7 @@ public class AssetControllerIT extends AbstractControllerIT {
         @DisplayName("Should return status 401 for invalid authentication")
         // TODO: Implement documented error response body
         public void shouldReturn401ForInvalidAuthentication() throws Exception {
-            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), UNKNOWN_TENANT_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), UNKNOWN_TENANT_JWT)
                     .andExpect(status().isUnauthorized())
                     .andExpect(header().string("WWW-Authenticate",
                             containsString("Bearer error=\"invalid_token\"")))
@@ -768,7 +768,7 @@ public class AssetControllerIT extends AbstractControllerIT {
         public void shouldReturn403ForInadequatePermissions() throws Exception {
             registerArquebusJwtWithRoles(Collections.emptyList());
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), ARQUEBUS_JWT)
                     .andExpect(status().isForbidden())
                     .andExpect(content().string(""));
         }
@@ -780,7 +780,7 @@ public class AssetControllerIT extends AbstractControllerIT {
 
             var nonexistentId = "bb4a7634-3563-42d6-b946-c16808d1ec4c";
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(nonexistentId), ARQUEBUS_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(nonexistentId), ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
@@ -794,7 +794,7 @@ public class AssetControllerIT extends AbstractControllerIT {
         public void shouldReturn404ForCrossTenantId() throws Exception {
             registerAllTenantJwtsWithRoles(List.of("write:asset"));
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), BALAM_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(ARQUEBUS_TEST_ASSET_ID), BALAM_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {
@@ -802,7 +802,7 @@ public class AssetControllerIT extends AbstractControllerIT {
                             }""".formatted(ARQUEBUS_TEST_ASSET_ID)
                     ));
 
-            sendDeleteRequest(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), ARQUEBUS_JWT)
+            sendDeleteRequestWithToken(PATH_TEMPLATE.formatted(BALAM_TEST_ASSET_ID), ARQUEBUS_JWT)
                     .andExpect(status().isNotFound())
                     .andExpect(content().json("""
                             {

@@ -58,7 +58,7 @@ public abstract class AbstractControllerIT {
                 .with(bearerToken(token)));
     }
 
-    protected ResultActions sendDeleteRequest(String path, String token) throws Exception {
+    protected ResultActions sendDeleteRequestWithToken(String path, String token) throws Exception {
         return mockMvc.perform(delete(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(bearerToken(token)));
